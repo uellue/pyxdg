@@ -411,7 +411,7 @@ class Rule:
     def fromFilename(cls, type, filename):
         tree = ast.Expression(
             body=ast.Compare(
-                left=ast.Str(filename),
+                left=ast.Constant(filename),
                 ops=[ast.Eq()],
                 comparators=[ast.Attribute(
                     value=ast.Name(id='menuentry', ctx=ast.Load()),
@@ -419,7 +419,6 @@ class Rule:
                     ctx=ast.Load()
                 )]
             ),
-            lineno=1, col_offset=0
         )
         ast.fix_missing_locations(tree)
         rule = Rule(type, tree)
@@ -763,12 +762,10 @@ class XMLMenuBuilder(object):
 
     def parse_rule(self, node):
         type = Rule.TYPE_INCLUDE if node.tag == 'Include' else Rule.TYPE_EXCLUDE
-        tree = ast.Expression(lineno=1, col_offset=0)
         expr = self.parse_bool_op(node, ast.Or())
-        if expr:
-            tree.body = expr
-        else:
-            tree.body = _ast_const('False')
+        if not expr:
+            expr = _ast_const('False')
+        tree = ast.Expression(expr)
         ast.fix_missing_locations(tree)
         return Rule(type, tree)
 
@@ -799,7 +796,7 @@ class XMLMenuBuilder(object):
         elif tag == 'Category':
             category = node.text
             return ast.Compare(
-                left=ast.Str(category),
+                left=ast.Constant(category),
                 ops=[ast.In()],
                 comparators=[ast.Attribute(
                     value=ast.Name(id='menuentry', ctx=ast.Load()),
@@ -810,7 +807,7 @@ class XMLMenuBuilder(object):
         elif tag == 'Filename':
             filename = node.text
             return ast.Compare(
-                left=ast.Str(filename),
+                left=ast.Constant(filename),
                 ops=[ast.Eq()],
                 comparators=[ast.Attribute(
                     value=ast.Name(id='menuentry', ctx=ast.Load()),

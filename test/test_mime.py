@@ -1,7 +1,16 @@
 from xdg import Mime
+import xdg.BaseDirectory
 import unittest
-import os.path
+import os
 import tempfile, shutil
+
+try:
+    reload
+except NameError:
+    try:
+        from imp import reload
+    except ModuleNotFoundError:
+        from importlib import reload
 
 import resources
 
@@ -402,3 +411,50 @@ class GlobsParsingTest(MimeTestBase):
         self.assertEqual(ag[_l('text', 'x-c++src')], set([(50, '*.C', ('cs',))]) )
         self.assertEqual(ag[_l('text', 'x-readme')], set([(20, 'RDME', ('cs',))]) )
         assert _l('text', 'x-python') not in ag, ag
+
+
+def test_install_mime_info(tmp_path):
+    # 1. Redirect to temporary XDG_DATA_HOME
+    # 2. Install test MIME info
+    # 3. Confirm it is working as intended
+    # 4. Restore previous XDG_DATA_HOME and reload MIME database
+    test_definition = """<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+<mime-type type="application/x.xdg-mime-selftest">
+  <comment>Canary file type to test database installation effect</comment>
+  <glob pattern="*.xdg-mime-selftest"/>
+</mime-type>
+</mime-info>
+"""
+    old_xdg_data_home = os.environ.get('XDG_DATA_HOME')
+    try:
+        workdir = tmp_path / 'localshare'
+        os.environ['XDG_DATA_HOME'] = str(workdir)
+        # Make the new base directory active by reloading the module
+        reload(xdg.BaseDirectory)
+
+        package_file = tmp_path / 'xdg-mime-selftest.xml'
+        package_file.write_text(test_definition)
+        Mime.install_mime_info(application='xdg-mime-selftest-foo', package_file=package_file)
+
+        installed = workdir / 'mime' / 'packages' / 'xdg-mime-selftest-foo.xml'
+        # File was installed under the correct name to the correct location
+        assert installed.exists()
+        # ...with the correct content
+        assert installed.read_text() == test_definition
+
+        # Does not need to exist when matching by name
+        res = Mime.get_type_by_name('/tmp/whatever.xdg-mime-selftest')
+        assert res.media == 'application'
+        assert res.subtype == 'x.xdg-mime-selftest'
+    finally:
+        if old_xdg_data_home is None:
+            del os.environ['XDG_DATA_HOME']
+        else:
+            os.environ['XDG_DATA_HOME'] = old_xdg_data_home
+        reload(xdg.BaseDirectory)
+        # Force reload to remove entry
+        Mime._cache_database()
+    # Make sure we have properly deactivated the temporary MIME
+    res = Mime.get_type_by_name('/tmp/whatever.xdg-mime-selftest')
+    assert res is None

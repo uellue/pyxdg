@@ -9,7 +9,10 @@ import stat
 try:
     reload
 except NameError:
-    from imp import reload
+    try:
+        from imp import reload
+    except ModuleNotFoundError:
+        from importlib import reload
 
 class BaseDirectoryTest(unittest.TestCase):
     def setUp(self):

@@ -24,6 +24,7 @@ import re
 import stat
 import sys
 import fnmatch
+import subprocess
 
 from xdg import BaseDirectory
 import xdg.Locale
@@ -777,8 +778,17 @@ def install_mime_info(application, package_file):
 
     # Update the database...
     command = 'update-mime-database'
-    if os.spawnlp(os.P_WAIT, command, command, BaseDirectory.save_data_path('mime')):
+    directory = BaseDirectory.save_data_path('mime')
+    res = subprocess.run(
+        (command, directory),
+        check=False,
+        capture_output=True
+    )
+    if res.returncode != 0:
         os.unlink(new_file)
+        output = res.stderr.decode('utf-8') + '\n' + res.stdout.decode('utf-8')
         raise Exception("The '%s' command returned an error code!\n" \
+                  "Output '%s' \n" \
                   "Make sure you have the freedesktop.org shared MIME package:\n" \
-                  "http://standards.freedesktop.org/shared-mime-info/" % command)
+                  "http://standards.freedesktop.org/shared-mime-info/" % (command, output)
+        )
